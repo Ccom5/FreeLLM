@@ -233,20 +233,25 @@ function guessRate(m){
 
 // Convierte el documento agregado (fetchedAt, models[], providers{}) al formato
 // que usa la UI: lista de proveedores con sus modelos anidados.
+const FAST_PROVIDER_IDS = new Set(['groq','cerebras','sambanova','nvidia-nim','nvidia']);
+
 function normalizeAggregate(agg){
-  const provMeta = agg.providers || {};
+  // agg.providers llega como ARRAY de {id, displayName, baseUrl, docsUrl, apiKeySignupUrl, ...}
+  const provList = Array.isArray(agg.providers) ? agg.providers : Object.values(agg.providers || {});
   const byId = {};
-  Object.keys(provMeta).forEach(id=>{
-    const p = provMeta[id] || {};
+  provList.forEach(p=>{
+    const id = p.id || p.providerId || p.name;
+    if(!id) return;
     byId[id] = {
-      name: p.name || p.displayName || id,
+      name: p.displayName || p.name || id,
       category: 'inference_provider',
       country: '',
       flag: '🌐',
-      url: p.docsUrl || p.url || p.website || '#',
-      baseUrl: p.baseUrl || p.base_url || '',
-      desc: p.description || '',
+      url: p.docsUrl || p.apiKeySignupUrl || p.url || '#',
+      baseUrl: p.openaiCompatibleBaseUrl || p.baseUrl || p.base_url || '',
+      desc: p.notes || p.description || '',
       noCard: true,
+      fast: FAST_PROVIDER_IDS.has(id),
       models: []
     };
   });
@@ -255,7 +260,7 @@ function normalizeAggregate(agg){
     if(!byId[pid]){
       byId[pid] = {
         name: pid, category:'inference_provider', country:'', flag:'🌐',
-        url:'#', baseUrl:'', desc:'', noCard:true, models:[]
+        url:'#', baseUrl:'', desc:'', noCard:true, fast: FAST_PROVIDER_IDS.has(pid), models:[]
       };
     }
     byId[pid].models.push({
