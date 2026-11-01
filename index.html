@@ -348,9 +348,8 @@ function humanizeRate(s){
 }
 
 const REASONING_PATTERNS = [
-  /\breasoning\b/, /\breason\b/, /\bthinking\b/, /\bthink\b/,
-  /\br1\b/, /-r1(\b|[-:])/, /\bqwq\b/, /\bo1\b/, /\bo3\b/, /\bo4\b/,
-  /\bdeepthink\b/, /\bcot\b/
+  /\breason/, /\bthink/, /\br1\b/, /-r1(\b|[-:])/, /\bqwq\b/,
+  /\bo1\b/, /\bo3\b/, /\bo4\b/, /\bcot\b/
 ];
 function modelTags(p,m){
   const s=(m.modality+" "+m.name).toLowerCase();
