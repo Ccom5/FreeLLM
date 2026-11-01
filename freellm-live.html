@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>FreeLLM Filter</title>
+<style>
+:root{
+  --bg:#0f1115; --surface:#171a21; --surface2:#1f232c; --border:#2a2f3a;
+  --text:#e8eaed; --muted:#9aa0ab; --accent:#5b8cff; --accent2:#2ecc8f;
+  --warn:#f0a63a;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    --bg:#f5f6f8; --surface:#ffffff; --surface2:#eef0f4; --border:#dde1e8;
+    --text:#14161a; --muted:#5a6270; --accent:#3a66e0; --accent2:#1a9e6b; --warn:#b5720a;
+    color-scheme: light;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#f5f6f8; --surface:#ffffff; --surface2:#eef0f4; --border:#dde1e8;
+  --text:#14161a; --muted:#5a6270; --accent:#3a66e0; --accent2:#1a9e6b; --warn:#b5720a;
+  color-scheme: light;
+}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{
+  margin:0; background:var(--bg); color:var(--text);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+header{
+  position:sticky; top:0; z-index:10;
+  padding:14px 18px calc(14px + env(safe-area-inset-top,0px));
+  padding-top:calc(14px + env(safe-area-inset-top,0px));
+  background:var(--surface); border-bottom:1px solid var(--border);
+}
+header h1{margin:0; font-size:18px}
+header p{margin:4px 0 0; color:var(--muted); font-size:12.5px}
+.wrap{max-width:980px; margin:0 auto; padding:16px}
+.filters{
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+  gap:10px; background:var(--surface); border:1px solid var(--border);
+  border-radius:12px; padding:14px; margin-bottom:16px;
+}
+.field label{display:block; font-size:12px; color:var(--muted); margin-bottom:5px}
+select,input[type=text]{
+  width:100%; background:var(--surface2); border:1px solid var(--border);
+  color:var(--text); border-radius:8px; padding:8px 10px; font-size:13.5px;
+}
+.chip-row{display:flex; flex-wrap:wrap; gap:6px; margin-top:4px}
+.chip{
+  border:1px solid var(--border); background:var(--surface2); color:var(--muted);
+  padding:5px 10px; border-radius:999px; font-size:12px; cursor:pointer; user-select:none;
+}
+.chip.active{background:var(--accent); color:#fff; border-color:var(--accent)}
+.summary{font-size:12.5px; color:var(--muted); margin-bottom:10px}
+.provider{
+  background:var(--surface); border:1px solid var(--border); border-radius:12px;
+  padding:14px 16px; margin-bottom:12px;
+}
+.provider-head{display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap}
+.provider-head h3{margin:0; font-size:15.5px}
+.provider-head a{color:var(--accent); font-size:12px; text-decoration:none}
+.badge{font-size:11px; padding:2px 7px; border-radius:6px; background:var(--surface2); color:var(--muted); border:1px solid var(--border)}
+.badge.cat-provider{color:var(--accent2); border-color:var(--accent2)}
+.badge.cat-inference{color:var(--accent); border-color:var(--accent)}
+.desc{font-size:12.5px; color:var(--muted); margin:6px 0 10px}
+table{width:100%; border-collapse:collapse; font-size:12.5px}
+.tbl-scroll{overflow-x:auto}
+th,td{text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); white-space:nowrap}
+th{color:var(--muted); font-weight:600}
+td.sel{white-space:normal}
+.model-name{font-family:ui-monospace,Menlo,monospace; font-size:11.5px}
+.empty{text-align:center; color:var(--muted); padding:40px 10px}
+.bar{
+  position:sticky; bottom:0; background:var(--surface); border-top:1px solid var(--border);
+  padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px)); display:flex; gap:8px; align-items:center;
+  justify-content:space-between; flex-wrap:wrap;
+}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:9;background:var(--surface)}
+button{
+  background:var(--accent); color:#fff; border:none; border-radius:8px;
+  padding:9px 16px; font-size:13.5px; cursor:pointer;
+}
+button.secondary{background:var(--surface2); color:var(--text); border:1px solid var(--border)}
+button:disabled{opacity:.45; cursor:not-allowed}
+dialog{
+  background:var(--surface); color:var(--text); border:1px solid var(--border);
+  border-radius:12px; max-width:640px; width:92vw; padding:0;
+}
+dialog::backdrop{background:rgba(0,0,0,.5)}
+.dlg-head{padding:14px 18px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center}
+.dlg-body{padding:16px 18px}
+textarea{
+  width:100%; min-height:260px; background:var(--surface2); color:var(--text);
+  border:1px solid var(--border); border-radius:8px; padding:10px; font-family:ui-monospace,Menlo,monospace;
+  font-size:12px; resize:vertical;
+}
+.note{font-size:11.5px; color:var(--muted); margin-top:10px; line-height:1.5}
+input[type=checkbox]{accent-color:var(--accent); width:15px; height:15px; cursor:pointer}
+</style>
+</head>
+<body>
+<header>
+  <div style="display:flex; align-items:center; gap:10px; margin-bottom:6px">
+    <img src="data:image/jpeg;base64,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" alt="avatar" style="width:40px; height:40px; border-radius:50%; object-fit:cover; border:1px solid var(--border)">
+    <span style="font-weight:600; font-size:14px">Red X - @Miguel_CCom5</span>
+  </div>
+  <h1><svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin-right:6px"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>FreeLLM Filter</h1>
+  <p id="statusLine">Cargando datos en vivo de <b>luongnv89/free-llm-models</b>…</p>
+</header>
+
+<div class="wrap">
+  <div class="filters">
+    <div class="field">
+      <label>Buscar</label>
+      <input type="text" id="q" placeholder="nombre, modelo...">
+    </div>
+    <div class="field">
+      <label>Contexto mínimo</label>
+      <select id="ctx">
+        <option value="0">Cualquiera</option>
+        <option value="32">≥ 32K</option>
+        <option value="128">≥ 128K</option>
+        <option value="256">≥ 256K</option>
+        <option value="1000">≥ 1M</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Categoría</label>
+      <select id="cat">
+        <option value="">Todas</option>
+        <option value="provider_api">Provider API</option>
+        <option value="inference_provider">Inference provider</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Sin key / sin tarjeta</label>
+      <select id="nokey">
+        <option value="">Indiferente</option>
+        <option value="1">No requiere tarjeta</option>
+      </select>
+    </div>
+  </div>
+  <div class="filters" style="grid-template-columns:1fr">
+    <div class="field">
+      <label>Capacidad</label>
+      <div class="chip-row">
+        <span class="chip" data-tag="reasoning"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M15 13a4.5 4.5 0 0 1-3-4 4.5 4.5 0 0 1-3 4"/></svg>Razonamiento</span>
+        <span class="chip" data-tag="code"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>Código</span>
+        <span class="chip" data-tag="image"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21"/></svg>Imagen/Visión</span>
+        <span class="chip" data-tag="fast"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>Baja latencia (Groq/Cerebras/SambaNova)</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="summary" id="summary"></div>
+  <div id="errBox" style="display:none;background:var(--surface);border:1px solid var(--warn);border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:12.5px;color:var(--text)">
+    No se pudieron cargar los datos en vivo. <button class="secondary" id="retryBtn" style="padding:5px 10px;font-size:12px;margin-left:6px">Reintentar</button>
+  </div>
+  <div id="list"></div>
+</div>
+
+<div class="bar">
+  <span id="selCount" style="font-size:12.5px;color:var(--muted)">0 modelos seleccionados</span>
+  <div style="display:flex; gap:8px">
+    <button class="secondary" id="clearBtn">Limpiar selección</button>
+    <button id="genBtn" disabled>Generar config</button>
+  </div>
+</div>
+
+<dialog id="dlg">
+  <div class="dlg-head">
+    <b>Config generada</b>
+    <button class="secondary" id="closeDlg">Cerrar</button>
+  </div>
+  <div class="dlg-body">
+    <textarea id="out" readonly></textarea>
+    <div style="margin-top:10px; display:flex; gap:8px">
+      <button id="copyBtn">Copiar JSON</button>
+    </div>
+    <p class="note">Formato pensado para un proxy estilo FreeLLMAPI: lista de proveedores con base_url, variable de entorno sugerida para la key y modelos elegidos. Ajusta nombres de variables a tu proxy real.</p>
+  </div>
+</dialog>
+
+<script>
+let DATA = [];
+
+const LIVE_SOURCES = [
+  "https://raw.githubusercontent.com/luongnv89/free-llm-models/main/web/public/free_models.json",
+  "https://raw.githubusercontent.com/luongnv89/free-llm-models/master/web/public/free_models.json"
+];
+const REFRESH_MS = 6 * 60 * 60 * 1000; // revalida cada 6h si la pestaña sigue abierta
+const CACHE_KEY = "freellm_filter_cache_v1";
+
+function num(v){
+  if(v===null || v===undefined) return 0;
+  if(typeof v==='number') return v;
+  const m=String(v).match(/[\d.]+/);
+  return m ? parseFloat(m[0]) : 0;
+}
+function toK(v){
+  // normaliza tokens a K (acepta 128000, "128000", "128K", "1M", etc.)
+  if(v===null || v===undefined || v==='') return 0;
+  const s=String(v).trim();
+  if(/m$/i.test(s)) return Math.round(num(s)*1000);
+  if(/k$/i.test(s)) return Math.round(num(s));
+  const n=num(s);
+  return n>=1000 ? Math.round(n/1000) : n;
+}
+function guessModality(m){
+  const caps = m.modalities || m.capabilities || m.tags || [];
+  const capStr = (Array.isArray(caps)?caps.join(' '):String(caps||'')).toLowerCase();
+  const parts=['Text'];
+  if(/vision|image|visual/.test(capStr)) parts.push('Image');
+  if(/audio|speech/.test(capStr)) parts.push('Audio');
+  if(/video/.test(capStr)) parts.push('Video');
+  return [...new Set(parts)].join(' + ');
+}
+function guessRate(m){
+  const l = m.limits || m.rateLimit || m.rate_limit || null;
+  if(!l) return m.free ? 'Gratis' : '—';
+  if(typeof l === 'string') return l;
+  const bits=[];
+  if(l.rpm) bits.push(l.rpm+' RPM');
+  if(l.rpd) bits.push(l.rpd+' RPD');
+  if(l.tpm) bits.push(l.tpm+' TPM');
+  if(l.tpd) bits.push(l.tpd+' TPD');
+  return bits.length ? bits.join(', ') : '—';
+}
+
+// Convierte el documento agregado (fetchedAt, models[], providers{}) al formato
+// que usa la UI: lista de proveedores con sus modelos anidados.
+function normalizeAggregate(agg){
+  const provMeta = agg.providers || {};
+  const byId = {};
+  Object.keys(provMeta).forEach(id=>{
+    const p = provMeta[id] || {};
+    byId[id] = {
+      name: p.name || p.displayName || id,
+      category: 'inference_provider',
+      country: '',
+      flag: '🌐',
+      url: p.docsUrl || p.url || p.website || '#',
+      baseUrl: p.baseUrl || p.base_url || '',
+      desc: p.description || '',
+      noCard: true,
+      models: []
+    };
+  });
+  (agg.models || []).forEach(m=>{
+    const pid = m.providerId || m.provider || 'unknown';
+    if(!byId[pid]){
+      byId[pid] = {
+        name: pid, category:'inference_provider', country:'', flag:'🌐',
+        url:'#', baseUrl:'', desc:'', noCard:true, models:[]
+      };
+    }
+    byId[pid].models.push({
+      name: m.id || m.name || 'modelo',
+      context: toK(m.context_length ?? m.contextLength ?? m.context ?? 0),
+      maxOut: toK(m.max_output_tokens ?? m.maxOutputTokens ?? m.maxOut ?? 0),
+      modality: guessModality(m),
+      rate: guessRate(m)
+    });
+  });
+  return Object.values(byId).filter(p=>p.models.length);
+}
+
+function setStatus(text){
+  const el=document.getElementById('statusLine');
+  if(el) el.textContent=text;
+}
+
+async function fetchLive(){
+  let lastErr=null;
+  for(const url of LIVE_SOURCES){
+    try{
+      const res = await fetch(url, {cache:'no-store'});
+      if(!res.ok) throw new Error('HTTP '+res.status);
+      const json = await res.json();
+      const data = normalizeAggregate(json);
+      if(!data.length) throw new Error('respuesta vacía');
+      try{
+        localStorage.setItem(CACHE_KEY, JSON.stringify({ts:Date.now(), fetchedAt:json.fetchedAt||null, data}));
+      }catch(e){}
+      return {data, fetchedAt: json.fetchedAt || null};
+    }catch(e){ lastErr=e; }
+  }
+  throw lastErr || new Error('sin fuentes disponibles');
+}
+
+function loadCache(){
+  try{
+    const raw = localStorage.getItem(CACHE_KEY);
+    if(!raw) return null;
+    return JSON.parse(raw);
+  }catch(e){ return null; }
+}
+
+async function init(){
+  document.getElementById('errBox').style.display='none';
+  const cached = loadCache();
+  if(cached && cached.data && cached.data.length){
+    DATA = cached.data;
+    setStatus('Mostrando caché local · actualizando…');
+    render();
+  }
+  try{
+    const {data, fetchedAt} = await fetchLive();
+    DATA = data;
+    const when = fetchedAt ? new Date(fetchedAt).toLocaleString('es') : new Date().toLocaleString('es');
+    setStatus('Datos en vivo de luongnv89/free-llm-models · actualizado: '+when);
+    render();
+  }catch(e){
+    if(DATA.length){
+      setStatus('Sin conexión a la fuente en vivo — usando caché local.');
+    } else {
+      setStatus('No se pudieron cargar los datos en vivo.');
+      document.getElementById('errBox').style.display='flex';
+      document.getElementById('errBox').style.alignItems='center';
+    }
+  }
+}
+
+document.getElementById('retryBtn').addEventListener('click', init);
+setInterval(init, REFRESH_MS);
+
+const activeTags = new Set();
+const selected = new Map(); // key: provider|model -> {provider, model}
+
+function humanizeRate(s){
+  if(!s) return s;
+  return s
+    .replace(/\bRPM\b/g,'peticiones/min')
+    .replace(/\bRPD\b/g,'peticiones/día')
+    .replace(/\bTPD\b/g,'tokens/día')
+    .replace(/\bTPM\b/g,'tokens/min')
+    .replace(/\bRPS\b/g,'peticiones/seg');
+}
+
+function modelTags(p,m){
+  const s=(m.modality+" "+m.name).toLowerCase();
+  const t=[];
+  if(s.includes("reasoning")) t.push("reasoning");
+  if(s.includes("code")) t.push("code");
+  if(s.includes("image")||s.includes("vision")||s.includes("video")) t.push("image");
+  if(p.fast) t.push("fast");
+  return t;
+}
+
+function render(){
+  const q=document.getElementById('q').value.trim().toLowerCase();
+  const ctxMin=parseInt(document.getElementById('ctx').value,10);
+  const cat=document.getElementById('cat').value;
+  const nokey=document.getElementById('nokey').value;
+
+  const list=document.getElementById('list');
+  list.innerHTML='';
+  let shown=0, totalModels=0;
+
+  DATA.forEach(p=>{
+    if(cat && p.category!==cat) return;
+    if(nokey==="1" && !p.noCard) return;
+    if(q && !(p.name.toLowerCase().includes(q) || p.models.some(m=>m.name.toLowerCase().includes(q)))) return;
+
+    const filteredModels = p.models.filter(m=>{
+      if(ctxMin && m.context < ctxMin) return false;
+      if(activeTags.size){
+        const tags=modelTags(p,m);
+        if(![...activeTags].some(t=>tags.includes(t))) return false;
+      }
+      if(q){
+        const okP=p.name.toLowerCase().includes(q);
+        const okM=m.name.toLowerCase().includes(q);
+        if(!okP && !okM) return false;
+      }
+      return true;
+    });
+    if(!filteredModels.length) return;
+
+    shown++; totalModels+=filteredModels.length;
+    const div=document.createElement('div');
+    div.className='provider';
+    const catBadge = p.category==='provider_api' ? '<span class="badge cat-provider">Provider API</span>' : '<span class="badge cat-inference">Inference provider</span>';
+    div.innerHTML = `
+      <div class="provider-head">
+        <h3>${p.flag} ${p.name} ${catBadge} ${p.noCard?'<span class="badge">sin tarjeta</span>':''}</h3>
+        <a href="${p.url}" target="_blank" rel="noopener">obtener key ↗</a>
+      </div>
+      <div class="desc">${p.desc}<br><span class="model-name">${p.baseUrl}</span></div>
+      <div class="tbl-scroll"><table>
+        <thead><tr><th></th><th>Modelo</th><th>Contexto</th><th>Max. salida</th><th>Modalidad</th><th>Límite</th></tr></thead>
+        <tbody>
+        ${filteredModels.map(m=>{
+          const key=p.name+'|'+m.name;
+          const checked = selected.has(key) ? 'checked' : '';
+          return `<tr>
+            <td class="sel"><input type="checkbox" data-key="${key}" ${checked}></td>
+            <td class="model-name">${m.name}</td>
+            <td>${m.context?m.context+'K':'—'}</td>
+            <td>${m.maxOut?m.maxOut+'K':'—'}</td>
+            <td>${m.modality}</td>
+            <td>${humanizeRate(m.rate)}</td>
+          </tr>`;
+        }).join('')}
+        </tbody>
+      </table></div>
+    `;
+    list.appendChild(div);
+
+    div.querySelectorAll('input[type=checkbox]').forEach(cb=>{
+      cb.addEventListener('change',e=>{
+        const key=e.target.dataset.key;
+        if(e.target.checked){
+          const [provName,modelName]=key.split('|');
+          const prov=DATA.find(x=>x.name===provName);
+          const model=prov.models.find(x=>x.name===modelName);
+          selected.set(key,{provider:prov,model});
+        } else {
+          selected.delete(key);
+        }
+        updateBar();
+      });
+    });
+  });
+
+  if(!shown){
+    list.innerHTML='<div class="empty">Sin resultados con estos filtros.</div>';
+  }
+  document.getElementById('summary').textContent = `${shown} proveedores · ${totalModels} modelos visibles`;
+  updateBar();
+}
+
+function updateBar(){
+  const n=selected.size;
+  document.getElementById('selCount').textContent = n+' modelo'+(n===1?'':'s')+' seleccionado'+(n===1?'':'s');
+  document.getElementById('genBtn').disabled = n===0;
+}
+
+document.querySelectorAll('.chip').forEach(c=>{
+  c.addEventListener('click',()=>{
+    const t=c.dataset.tag;
+    if(activeTags.has(t)){activeTags.delete(t); c.classList.remove('active');}
+    else {activeTags.add(t); c.classList.add('active');}
+    render();
+  });
+});
+['q','ctx','cat','nokey'].forEach(id=>document.getElementById(id).addEventListener('input',render));
+
+document.getElementById('clearBtn').addEventListener('click',()=>{
+  selected.clear(); render();
+});
+
+document.getElementById('genBtn').addEventListener('click',()=>{
+  const byProvider={};
+  selected.forEach(({provider,model})=>{
+    if(!byProvider[provider.name]) byProvider[provider.name]={
+      provider: provider.name,
+      base_url: provider.baseUrl,
+      api_key_url: provider.url,
+      api_key_env: "FREELLMAPI_"+provider.name.toUpperCase().replace(/[^A-Z0-9]+/g,'_')+"_KEY",
+      no_card_required: provider.noCard,
+      models: []
+    };
+    byProvider[provider.name].models.push({
+      id: model.name,
+      context_window: model.context ? model.context+"K" : null,
+      modality: model.modality,
+      rate_limit: model.rate
+    });
+  });
+  const config = { generated_at: new Date().toISOString(), source: "mnfst/awesome-free-llm-apis", providers: Object.values(byProvider) };
+  document.getElementById('out').value = JSON.stringify(config,null,2);
+  document.getElementById('dlg').showModal();
+});
+
+document.getElementById('closeDlg').addEventListener('click',()=>document.getElementById('dlg').close());
+document.getElementById('copyBtn').addEventListener('click',()=>{
+  const ta=document.getElementById('out');
+  ta.select();
+  try{ document.execCommand('copy'); }catch(e){}
+  if(navigator.clipboard) navigator.clipboard.writeText(ta.value).catch(()=>{});
+  const b=document.getElementById('copyBtn'); const old=b.textContent;
+  b.textContent='Copiado ✓'; setTimeout(()=>b.textContent=old,1200);
+});
+
+init();
+</script>
+</body>
+</html>
